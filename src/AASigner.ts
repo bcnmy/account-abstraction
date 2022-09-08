@@ -10,7 +10,8 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
 import { clearInterval } from 'timers'
 import { Create2Factory } from './Create2Factory'
 import { getCreate2Address, hexConcat, keccak256 } from 'ethers/lib/utils'
-import { HashZero } from '../test/testutils'
+import { HashZero, AddressZero } from '../test/testutils'
+
 
 export type SendUserOp = (userOp: UserOperation) => Promise<TransactionResponse | undefined>
 
@@ -22,6 +23,7 @@ export const debug = process.env.DEBUG != null
  * @param provider - rpc provider that supports "eth_sendUserOperation"
  */
 export function rpcUserOpSender (provider: ethers.providers.JsonRpcProvider, entryPointAddress: string): SendUserOp {
+  console.log('rpcUserOpSender')
   let chainId: number
 
   return async function (userOp) {
@@ -67,6 +69,7 @@ interface QueueSendUserOp extends SendUserOp {
  * the returned object handles the queue of userops and also interval control.
  */
 export function queueUserOpSender (entryPointAddress: string, signer: Signer, intervalMs = 3000): QueueSendUserOp {
+  console.log('rpcUserOpSender')
   const entryPoint = EntryPoint__factory.connect(entryPointAddress, signer)
 
   const ret = async function (userOp: UserOperation) {
@@ -117,6 +120,7 @@ const IDLE_TIME = 5000
 const BUNDLE_SIZE_IMMEDIATE = 3
 
 async function sendQueuedUserOps (queueSender: QueueSendUserOp, entryPoint: EntryPoint): Promise<void> {
+  console.log('sendQueuedUserOps')
   if (sending) {
     console.log('sending in progress. waiting')
     return
@@ -159,21 +163,31 @@ async function sendQueuedUserOps (queueSender: QueueSendUserOp, entryPoint: Entr
  * @param beneficiary the account to receive the payment (from wallet/paymaster). defaults to the signer's address
  */
 export function localUserOpSender (entryPointAddress: string, signer: Signer, beneficiary?: string): SendUserOp {
+  console.log('localUserOpSender')
+  
+  
   const entryPoint = EntryPoint__factory.connect(entryPointAddress, signer)
   return async function (userOp) {
     if (debug) {
-      console.log('sending', {
+      console.log('sending transaction ', {
         ...userOp,
         initCode: userOp.initCode.length <= 2 ? userOp.initCode : `<len=${userOp.initCode.length}>`
       })
     }
     const gasLimit = BigNumber.from(userOp.preVerificationGas).add(userOp.verificationGasLimit).add(userOp.callGasLimit)
     console.log('calc gaslimit=', gasLimit.toString())
-    const ret = await entryPoint.handleOps([userOp], beneficiary ?? await signer.getAddress(), {
-      maxPriorityFeePerGas: userOp.maxPriorityFeePerGas,
-      maxFeePerGas: userOp.maxFeePerGas
-    })
-    await ret.wait()
+    try{
+      const ret = await entryPoint.handleOps([userOp], beneficiary ?? await signer.getAddress(), {
+        maxPriorityFeePerGas: userOp.maxPriorityFeePerGas,
+        maxFeePerGas: userOp.maxFeePerGas
+      })
+      console.log('tx sent');
+      
+      await ret.wait()
+    }catch(err){
+      console.log('localUserOpSender error ', err);
+      
+    }
     return undefined
   }
 }
@@ -182,6 +196,7 @@ export class AAProvider extends BaseProvider {
   private readonly entryPoint: EntryPoint
 
   constructor (entryPointAddress: string, provider: Provider) {
+    console.log('AA provider constructor')
     super(provider.getNetwork())
     this.entryPoint = EntryPoint__factory.connect(entryPointAddress, provider)
   }
@@ -208,11 +223,13 @@ export class AASigner extends Signer {
   constructor (readonly signer: Signer, readonly entryPointAddress: string, readonly sendUserOp: SendUserOp, readonly index = 0, readonly provider = signer.provider) {
     super()
     this.entryPoint = EntryPoint__factory.connect(entryPointAddress, signer)
+    console.log(' AASigner Constructor')
   }
 
   // connect to a specific pre-deployed address
   // (note: in order to send transactions, the underlying signer address must be valid signer for this wallet (its owner)
   async connectWalletAddress (address: string): Promise<void> {
+    console.log(' connectWalletAddress ')
     if (this._wallet != null) {
       throw Error('already connected to wallet')
     }
@@ -228,35 +245,43 @@ export class AASigner extends Signer {
   }
 
   async _deploymentAddress (): Promise<string> {
+    console.log('query for _deploymentAddress');
     return getCreate2Address(Create2Factory.contractAddress, HashZero, keccak256(await this._deploymentTransaction()))
   }
 
   async _deploymentTransaction (): Promise<BytesLike> {
+    console.log('query for _deploymentTransaction');
     const ownerAddress = await this.signer.getAddress()
     return new SimpleWallet__factory(this.signer)
       .getDeployTransaction(this.entryPoint.address, ownerAddress).data!
   }
 
   async getAddress (): Promise<string> {
+    console.log('query for getAddress');
     await this.syncAccount()
     return this._wallet!.address
   }
 
   async signMessage (message: Bytes | string): Promise<string> {
+    console.log('signMessage');
     throw new Error('signMessage: unsupported by AA')
   }
 
   async signTransaction (transaction: Deferrable<TransactionRequest>): Promise<string> {
+    console.log('signTransaction');
     throw new Error('signMessage: unsupported by AA')
   }
 
   async getWallet (): Promise<SimpleWallet> {
+    console.log('getWallet')
     await this.syncAccount()
     return this._wallet!
   }
 
   // fabricate a response in a format usable by ethers users...
   async userEventResponse (userOp: UserOperation): Promise<TransactionResponse> {
+    console.log('userEventResponse initiated');
+    
     const entryPoint = this.entryPoint
     const requestId = getRequestId(userOp, entryPoint.address, await this._chainId!)
     const provider = entryPoint.provider
@@ -335,6 +360,7 @@ export class AASigner extends Signer {
   }
 
   async sendTransaction (transaction: Deferrable<TransactionRequest>): Promise<TransactionResponse> {
+    console.log('sendTransaction ');
     const userOp = await this._createUserOperation(transaction)
     // get response BEFORE sending request: the response waits for events, which might be triggered before the actual send returns.
     const reponse = await this.userEventResponse(userOp)
@@ -343,6 +369,7 @@ export class AASigner extends Signer {
   }
 
   async syncAccount (): Promise<void> {
+    console.log(' syncAccount ');
     if (this._wallet == null) {
       const address = await this._deploymentAddress()
       this._wallet = SimpleWallet__factory.connect(address, this.signer)
@@ -366,12 +393,21 @@ export class AASigner extends Signer {
   }
 
   async _createUserOperation (transaction: Deferrable<TransactionRequest>): Promise<UserOperation> {
+    console.log(' _createUserOperation ');
+    console.log('tx state ', transaction);
     const tx: TransactionRequest = await resolveProperties(transaction)
     await this.syncAccount()
 
+    console.log('tx state ', tx);
+    
+
     let initCode: BytesLike | undefined
     if (this._isPhantom) {
-      const initCallData = new Create2Factory(this.provider!).getDeployTransactionCallData(hexValue(await this._deploymentTransaction()), HashZero)
+      const deploymentTrx = (await this._deploymentTransaction())
+      console.log(' deploymentTrx ', deploymentTrx);
+      const hex = hexValue(deploymentTrx)
+      console.log(' hex ', hex);
+      const initCallData = new Create2Factory(this.provider!).getDeployTransactionCallData(hex, HashZero)
 
       initCode = hexConcat([
         Create2Factory.contractAddress,
@@ -387,6 +423,7 @@ export class AASigner extends Signer {
       maxPriorityFeePerGas = gasPrice
       maxFeePerGas = gasPrice
     }
+    
     const userOp = await fillAndSign({
       sender: this._wallet!.address,
       initCode,
@@ -396,6 +433,7 @@ export class AASigner extends Signer {
       maxPriorityFeePerGas,
       maxFeePerGas
     }, this.signer, this.entryPoint)
+    console.log(' userOp ', userOp);
 
     return userOp
   }

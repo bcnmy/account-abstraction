@@ -187,6 +187,8 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
     }
     if (op1.verificationGasLimit == null) {
       if (provider == null) throw new Error('no entrypoint/provider')
+      console.log('verificationGasLimit trying to estimate');
+      
       const initEstimate = await provider.estimateGas({
         from: entryPoint?.address,
         to: initAddr,
@@ -203,6 +205,7 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
   }
   if (op1.callGasLimit == null && op.callData != null) {
     if (provider == null) throw new Error('must have entryPoint for callGasLimit estimate')
+    console.log('callGasLimit trying to estimate');
     const gasEtimated = await provider.estimateGas({
       from: entryPoint?.address,
       to: op1.sender,
@@ -229,6 +232,7 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
     // TODO: we don't add overhead, which is ~21000 for a single TX, but much lower in a batch.
     op2.preVerificationGas = callDataCost(packUserOp(op2, false))
   }
+  console.log('userOp made succesfully')
   return op2
 }
 

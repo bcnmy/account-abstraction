@@ -79,6 +79,7 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   const prebalance = await provider.getBalance(myAddress)
   console.log('balance=', prebalance.div(1e9).toString(), 'deposit=', preDeposit.div(1e9).toString())
   console.log('estimate direct call', { gasUsed: await testCounter.connect(ethersSigner).estimateGas.justemit().then(t => t.toNumber()) })
+  console.log('About To Emit ');
   const ret = await testCounter.justemit()
   console.log('waiting for mine, hash (reqId)=', ret.hash)
   const rcpt = await ret.wait()

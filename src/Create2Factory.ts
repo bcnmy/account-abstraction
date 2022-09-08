@@ -68,7 +68,8 @@ export class Create2Factory {
   getDeployTransactionCallData (initCode: string, salt: BigNumberish = 0): string {
     const factory = new Contract(Create2Factory.contractAddress, ['function deploy(bytes _initCode, bytes32 _salt) returns(address)'])
     const saltBytes32 = hexZeroPad(hexlify(salt), 32)
-    return factory.interface.encodeFunctionData('deploy', [initCode, saltBytes32])
+    const encodedData = factory.interface.encodeFunctionData('deploy', [initCode, saltBytes32])
+    return encodedData
   }
 
   /**
