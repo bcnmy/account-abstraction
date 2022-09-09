@@ -43,10 +43,14 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
     sendUserOp = rpcUserOpSender(newprovider, entryPointAddress)
     const supportedEntryPoints: string[] = await newprovider.send('eth_supportedEntryPoints', []).then(ret => ret.map(ethers.utils.getAddress))
     console.log('node supported EntryPoints=', supportedEntryPoints)
-    if (!supportedEntryPoints.includes(entryPointAddress)) {
+    /* if (!supportedEntryPoints.includes(entryPointAddress)) {
       console.error('ERROR: node', aa_url, 'does not support our EntryPoint')
-    }
-  } else { sendUserOp = localUserOpSender(entryPointAddress, ethersSigner) }
+    } */
+  } else {
+    sendUserOp = localUserOpSender(entryPointAddress, ethersSigner)
+    console.log('sendUserOp hello')
+    console.log(sendUserOp)
+  }
 
   // index is unique for a wallet (so same owner can have multiple wallets, with different index
   const index = parseInt(process.env.AA_INDEX ?? '0')
@@ -55,6 +59,7 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   // connect to pre-deployed wallet
   // await aasigner.connectWalletAddress(walletAddress)
   const myAddress = await aasigner.getAddress()
+  console.log('aa signer getAddress ', myAddress)
   if (await provider.getBalance(myAddress) < parseEther('0.01')) {
     console.log('prefund wallet')
     await ethersSigner.sendTransaction({ to: myAddress, value: parseEther('0.01') })
@@ -79,7 +84,7 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   const prebalance = await provider.getBalance(myAddress)
   console.log('balance=', prebalance.div(1e9).toString(), 'deposit=', preDeposit.div(1e9).toString())
   console.log('estimate direct call', { gasUsed: await testCounter.connect(ethersSigner).estimateGas.justemit().then(t => t.toNumber()) })
-  console.log('About To Emit ');
+  console.log('About To Emit ')
   const ret = await testCounter.justemit()
   console.log('waiting for mine, hash (reqId)=', ret.hash)
   const rcpt = await ret.wait()

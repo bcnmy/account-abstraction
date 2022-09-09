@@ -174,21 +174,27 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
     const initAddr = hexDataSlice(op1.initCode!, 0, 20)
     const initCallData = hexDataSlice(op1.initCode!, 20)
     if (op1.nonce == null) op1.nonce = 0
+    console.log('what is opcode.sender ', op1.sender)
+    // op1.sender = undefined
     if (op1.sender == null) {
+      console.log('sender is null')
       // hack: if the init contract is our deployer, then we know what the address would be, without a view call
       if (initAddr.toLowerCase() === Create2Factory.contractAddress.toLowerCase()) {
+        console.log('=>> ever herer? +++')
         const [ctr] = defaultAbiCoder.decode(['bytes', 'bytes32'], '0x' + initCallData.slice(10))
         op1.sender = getCreate2Address(initAddr, HashZero, keccak256(ctr))
       } else {
-        // console.log('\t== not our deployer. our=', Create2Factory.contractAddress, 'got', initAddr)
+      // console.log('\t== not our deployer. our=', Create2Factory.contractAddress, 'got', initAddr)
+        console.log('=>-----> ever herer? -----')
         if (provider == null) throw new Error('no entrypoint/provider')
         op1.sender = await entryPoint!.connect(AddressZero).callStatic.getSenderAddress(op1.initCode!)
+        console.log('new op1.sender assigned ', op1.sender)
       }
     }
     if (op1.verificationGasLimit == null) {
       if (provider == null) throw new Error('no entrypoint/provider')
-      console.log('verificationGasLimit trying to estimate');
-      
+      console.log('verificationGasLimit trying to estimate')
+
       const initEstimate = await provider.estimateGas({
         from: entryPoint?.address,
         to: initAddr,
@@ -205,7 +211,7 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
   }
   if (op1.callGasLimit == null && op.callData != null) {
     if (provider == null) throw new Error('must have entryPoint for callGasLimit estimate')
-    console.log('callGasLimit trying to estimate');
+    console.log('callGasLimit trying to estimate')
     const gasEtimated = await provider.estimateGas({
       from: entryPoint?.address,
       to: op1.sender,

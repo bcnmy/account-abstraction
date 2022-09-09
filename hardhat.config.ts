@@ -11,7 +11,6 @@ dotenv.config()
 import * as fs from 'fs'
 
 const mnemonic = process.env.MNEMONIC || "test test test test test test"
-console.log(' mnemonic ', mnemonic);
 
 
 function getNetwork1 (url: string): { url: string, accounts: { mnemonic: string } } {
