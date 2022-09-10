@@ -175,9 +175,13 @@ export function localUserOpSender (entryPointAddress: string, signer: Signer, be
     }
     const gasLimit = BigNumber.from(userOp.preVerificationGas).add(userOp.verificationGasLimit).add(userOp.callGasLimit)
     console.log('calc gaslimit=', gasLimit.toString())
+    console.log('userOp.verificationGasLimit')
+    console.log(userOp.verificationGasLimit)
+    console.log('final user op ')
+    console.log(userOp)
     try {
       const ret = await entryPoint.handleOps([userOp], beneficiary ?? await signer.getAddress(), {
-        gasLimit: gasLimit,
+        // gasLimit: 20000000,
         maxPriorityFeePerGas: userOp.maxPriorityFeePerGas,
         maxFeePerGas: userOp.maxFeePerGas
       })
@@ -439,7 +443,7 @@ export class AASigner extends Signer {
       callGasLimit: tx.gasLimit,
       maxPriorityFeePerGas,
       maxFeePerGas
-    }, this.signer, this.entryPoint)
+    }, this.signer, this.entryPoint, this._isPhantom)
     console.log(' userOp ', userOp)
 
     return userOp

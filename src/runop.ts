@@ -73,9 +73,9 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   let preDeposit = await entryPoint.balanceOf(myAddress)
   console.log('current deposit=', preDeposit, 'current balance', await provider.getBalance(myAddress))
 
-  if (preDeposit.lte(parseEther('0.005'))) {
+  if (preDeposit.lte(parseEther('0.1'))) {
     console.log('depositing for wallet')
-    await entryPoint.depositTo(myAddress, { value: parseEther('0.01') })
+    await entryPoint.depositTo(myAddress, { value: parseEther('0.1') })
     preDeposit = await entryPoint.balanceOf(myAddress)
   }
 

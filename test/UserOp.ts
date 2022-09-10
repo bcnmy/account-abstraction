@@ -242,9 +242,17 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
   return op2
 }
 
-export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | Signer, entryPoint?: EntryPoint): Promise<UserOperation> {
+export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | Signer, entryPoint?: EntryPoint, isPhantom?: Boolean): Promise<UserOperation> {
   const provider = entryPoint?.provider
   const op2 = await fillUserOp(op, entryPoint)
+
+  console.log('fillAndSign isPhantom ', isPhantom)
+  // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+  if (isPhantom != null && isPhantom) {
+    op2.verificationGasLimit = 100000000
+  // op2.preVerificationGas = 5000000
+  // userOp.callGasLimit = 50000000
+  }
 
   const chainId = await provider!.getNetwork().then(net => net.chainId)
   const message = arrayify(getRequestId(op2, entryPoint!.address, chainId))
