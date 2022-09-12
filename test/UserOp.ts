@@ -206,8 +206,8 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
   }
   if (op1.nonce == null) {
     if (provider == null) throw new Error('must have entryPoint to autofill nonce')
-    const c = new Contract(op.sender!, ['function nonce() view returns(address)'], provider)
-    op1.nonce = await c.nonce().catch(rethrow())
+    const c = new Contract(op.sender!, ['function getNonce(uint256 batchId) view returns(uint256)'], provider)
+    op1.nonce = await c.getNonce(0).catch(rethrow())
   }
   if (op1.callGasLimit == null && op.callData != null) {
     if (provider == null) throw new Error('must have entryPoint for callGasLimit estimate')
@@ -220,7 +220,8 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
 
     // console.log('estim', op1.sender,'len=', op1.callData!.length, 'res=', gasEtimated)
     // estimateGas assumes direct call from entryPoint. add wrapper cost.
-    op1.callGasLimit = gasEtimated // .add(55000)
+    op1.callGasLimit = gasEtimated.add(55000)
+    console.log('callGasLimit with added wrapper ', op1.callGasLimit)
   }
   if (op1.maxFeePerGas == null) {
     if (provider == null) throw new Error('must have entryPoint to autofill maxFeePerGas')
@@ -246,10 +247,12 @@ export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | 
   const provider = entryPoint?.provider
   const op2 = await fillUserOp(op, entryPoint)
 
+  console.log('callGasLimit ', op2.callGasLimit)
+
   console.log('fillAndSign isPhantom ', isPhantom)
   // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
   if (isPhantom != null && isPhantom) {
-    op2.verificationGasLimit = 100000000
+    op2.verificationGasLimit = 10000000
   // op2.preVerificationGas = 5000000
   // userOp.callGasLimit = 50000000
   }

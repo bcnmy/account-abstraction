@@ -60,6 +60,7 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   // await aasigner.connectWalletAddress(walletAddress)
   const myAddress = await aasigner.getAddress()
   console.log('aa signer getAddress ', myAddress)
+  // Can make it 0.1
   if (await provider.getBalance(myAddress) < parseEther('0.01')) {
     console.log('prefund wallet')
     await ethersSigner.sendTransaction({ to: myAddress, value: parseEther('0.01') })
@@ -71,11 +72,13 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   const entryPoint = EntryPoint__factory.connect(entryPointAddress, ethersSigner)
   console.log('wallet address=', myAddress)
   let preDeposit = await entryPoint.balanceOf(myAddress)
+  console.log('pre deposit is ', preDeposit)
   console.log('current deposit=', preDeposit, 'current balance', await provider.getBalance(myAddress))
 
-  if (preDeposit.lte(parseEther('0.1'))) {
+  // Can make it 0.1
+  if (preDeposit.lte(parseEther('0.01'))) {
     console.log('depositing for wallet')
-    await entryPoint.depositTo(myAddress, { value: parseEther('0.1') })
+    await entryPoint.depositTo(myAddress, { value: parseEther('0.01') })
     preDeposit = await entryPoint.balanceOf(myAddress)
   }
 
@@ -92,9 +95,15 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   if (netname !== 'unknown') {
     console.log('rcpt', rcpt.transactionHash, `https://dashboard.tenderly.co/tx/${netname}/${rcpt.transactionHash}/gas-usage`)
   }
-  const gasPaid = prebalance.sub(await provider.getBalance(myAddress))
-  const depositPaid = preDeposit.sub(await entryPoint.balanceOf(myAddress))
-  console.log('paid (from balance)=', gasPaid.toNumber() / 1e9, 'paid (from deposit)', depositPaid.div(1e9).toString(), 'gasUsed=', rcpt.gasUsed)
+  console.log('BigNumber debug ')
+  console.log('myAddress', myAddress)
+  console.log('prebalance ', prebalance)
+  // const gasPaid = prebalance.sub(await provider.getBalance(myAddress))
+  // console.log('gasPaid ', gasPaid)
+  // console.log('pre deposit is ', preDeposit)
+  // console.log('await entryPoint.balanceOf(myAddress)', await entryPoint.balanceOf(myAddress))
+  // const depositPaid = preDeposit.sub(await entryPoint.balanceOf(myAddress))
+  // console.log('paid (from balance)=', gasPaid.toNumber() / 1e9, 'paid (from deposit)', depositPaid.div(1e9).toString(), 'gasUsed=', rcpt.gasUsed)
   const logs = await entryPoint.queryFilter('*' as any, rcpt.blockNumber)
   console.log(logs.map((e: any) => ({ ev: e.event, ...objdump(e.args!) })))
   console.log('1st run gas used:', await evInfo(rcpt))
