@@ -244,7 +244,7 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
   return op2
 }
 
-export async function getPaymasterAuthorization (op: Partial<UserOperation>, signer: Wallet | Signer, paymaster?: VerifyingPaymaster): Promise<string> {
+/* export async function getPaymasterAuthorization (op: Partial<UserOperation>, signer: Wallet | Signer, paymaster?: VerifyingPaymaster): Promise<string> {
   /* const opToSign = defaultAbiCoder.encode([
     'address', // sender
     'uint256', // nonce
@@ -265,12 +265,12 @@ export async function getPaymasterAuthorization (op: Partial<UserOperation>, sig
     op.preVerificationGas,
     op.maxFeePerGas,
     op.maxPriorityFeePerGas
-  ]) */
+  ])
   const hash = await paymaster!.getHash(op)
   const paymasterSignature = await signer.signMessage(arrayify(hash))
   console.log('paymaster signer signature ', paymasterSignature)
   return paymasterSignature
-}
+} */
 
 export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | Signer, entryPoint?: EntryPoint, paymaster?: VerifyingPaymaster, isPhantom?: Boolean): Promise<UserOperation> {
   const provider = entryPoint?.provider
@@ -286,8 +286,15 @@ export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | 
   // userOp.callGasLimit = 50000000
   }
 
+  // Send callData 0x if it's only meant for wallet deployment
+  // op2.callData = '0x'
+
   // const paymasterSignature = await getPaymasterAuthorization(op2, signer, paymaster)
 
+  // check from backend service
+  // const checkCondition = await verifySponsorShip(op2.sender)
+
+  // assuming returns true for now we go ahead and sign it
   const hash = await paymaster!.getHash(op2)
   const paymasterSignature = await signer.signMessage(arrayify(hash))
 
