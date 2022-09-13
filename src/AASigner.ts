@@ -1,7 +1,7 @@
 import { BigNumber, Bytes, ethers, Signer, Event } from 'ethers'
 import { BaseProvider, Provider, TransactionRequest } from '@ethersproject/providers'
 import { Deferrable, resolveProperties } from '@ethersproject/properties'
-import { SimpleWallet, SimpleWallet__factory, EntryPoint, EntryPoint__factory, Proxy, Proxy__factory, SmartWallet, SmartWallet__factory } from '../typechain'
+import { EntryPoint, EntryPoint__factory, SmartWallet, SmartWallet__factory, VerifyingPaymaster, VerifyingPaymaster__factory } from '../typechain'
 import { BytesLike, hexValue } from '@ethersproject/bytes'
 import { TransactionResponse } from '@ethersproject/abstract-provider'
 import { fillAndSign, getRequestId } from '../test/UserOp'
@@ -185,6 +185,7 @@ export function localUserOpSender (entryPointAddress: string, signer: Signer, be
     console.log(userOp)
     try {
       const ret = await entryPoint.handleOps([userOp], beneficiary ?? await signer.getAddress(), {
+        // ToDo: remove and test
         gasLimit: 25000000,
         maxPriorityFeePerGas: userOp.maxPriorityFeePerGas,
         maxFeePerGas: userOp.maxFeePerGas
@@ -217,6 +218,7 @@ export class AASigner extends Signer {
 
   private _isPhantom = true
   public entryPoint: EntryPoint
+  public paymaster: VerifyingPaymaster
 
   private _chainId: Promise<number> | undefined
 
@@ -227,9 +229,10 @@ export class AASigner extends Signer {
    * @param sendUserOp function to actually send the UserOp to the entryPoint.
    * @param index - index of this wallet for this signer.
    */
-  constructor (readonly signer: Signer, readonly entryPointAddress: string, readonly sendUserOp: SendUserOp, readonly index = 0, readonly provider = signer.provider) {
+  constructor (readonly signer: Signer, readonly entryPointAddress: string, readonly paymasterAddress: string, readonly sendUserOp: SendUserOp, readonly index = 0, readonly provider = signer.provider) {
     super()
     this.entryPoint = EntryPoint__factory.connect(entryPointAddress, signer)
+    this.paymaster = VerifyingPaymaster__factory.connect(paymasterAddress, signer)
     console.log(' AASigner Constructor')
   }
 
@@ -262,13 +265,25 @@ export class AASigner extends Signer {
     // return getCreate2Address(Create2Factory.contractAddress, HashZero, keccak256(await this._deploymentTransaction()))
   }
 
-  async _deploymentTransaction (): Promise<BytesLike> {
+  /* async _deploymentTransaction (): Promise<BytesLike> {
     console.log('query for _deploymentTransaction')
     const ownerAddress = await this.signer.getAddress()
     console.log('ownerAddress ', ownerAddress)
     console.log('entry point address ', this.entryPoint.address)
     return new SimpleWallet__factory(this.signer)
       .getDeployTransaction(this.entryPoint.address, ownerAddress).data!
+  } */
+
+  async deployPaymaster (): Promise<VerifyingPaymaster> {
+    const create2factory = new Create2Factory(this.provider!)
+    const abiCoder = ethers.utils.defaultAbiCoder
+    const signerAddress = await this.signer.getAddress()
+    const vpf = new VerifyingPaymaster__factory(this.signer)
+    const ctrParams = abiCoder.encode(['address', 'address'],
+      [this.entryPoint.address, signerAddress])
+    const addr = await create2factory.deploy(hexConcat([vpf.bytecode, ctrParams]), 0)
+    console.log('verifying paymaster deployed at: ', addr)
+    return VerifyingPaymaster__factory.connect(addr, this.signer)
   }
 
   async getAddress (): Promise<string> {
@@ -417,6 +432,7 @@ export class AASigner extends Signer {
   async _createUserOperation (transaction: Deferrable<TransactionRequest>): Promise<UserOperation> {
     console.log(' _createUserOperation ')
     console.log('tx state ', transaction)
+
     const tx: TransactionRequest = await resolveProperties(transaction)
     await this.syncAccount()
 
@@ -461,7 +477,7 @@ export class AASigner extends Signer {
       callGasLimit: tx.gasLimit,
       maxPriorityFeePerGas,
       maxFeePerGas
-    }, this.signer, this.entryPoint, this._isPhantom)
+    }, this.signer, this.entryPoint, this.paymaster, this._isPhantom)
     console.log(' userOp ', userOp)
 
     return userOp

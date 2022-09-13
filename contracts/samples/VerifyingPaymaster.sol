@@ -20,10 +20,14 @@ contract VerifyingPaymaster is BasePaymaster {
     using ECDSA for bytes32;
     using UserOperationLib for UserOperation;
 
-    address public immutable verifyingSigner;
+    address public verifyingSigner;
 
     constructor(IEntryPoint _entryPoint, address _verifyingSigner) BasePaymaster(_entryPoint) {
         verifyingSigner = _verifyingSigner;
+    }
+
+    function setNewSigner(address _newVerifyingSigner) public onlyOwner {
+        verifyingSigner = _newVerifyingSigner;
     }
 
     /**

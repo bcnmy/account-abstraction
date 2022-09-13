@@ -24,12 +24,13 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
       await hre.run('etherscan-verify')
     }
   }
-  const [entryPointAddress, testCounterAddress] = await Promise.all([
+  const [entryPointAddress, testCounterAddress, paymasterAddress] = await Promise.all([
     hre.deployments.get('EntryPoint').then(d => d.address),
-    hre.deployments.get('TestCounter').then(d => d.address)
+    hre.deployments.get('TestCounter').then(d => d.address),
+    hre.deployments.get('VerifyingPaymaster').then(d => d.address)
   ])
 
-  console.log('entryPointAddress:', entryPointAddress, 'testCounterAddress:', testCounterAddress)
+  console.log('entryPointAddress:', entryPointAddress, 'testCounterAddress:', testCounterAddress, 'paymasterAddress:', paymasterAddress)
   const provider = ethers.provider
   const ethersSigner = provider.getSigner(0)
   const prefundAccountAddress = await ethersSigner.getAddress()
@@ -55,7 +56,7 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   // index is unique for a wallet (so same owner can have multiple wallets, with different index
   const index = parseInt(process.env.AA_INDEX ?? '0')
   console.log('using account index (AA_INDEX)', index)
-  const aasigner = new AASigner(ethersSigner, entryPointAddress, sendUserOp, index)
+  const aasigner = new AASigner(ethersSigner, entryPointAddress, paymasterAddress, sendUserOp, index)
   // connect to pre-deployed wallet
   // await aasigner.connectWalletAddress(walletAddress)
   const myAddress = await aasigner.getAddress()

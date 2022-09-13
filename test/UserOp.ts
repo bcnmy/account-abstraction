@@ -2,6 +2,7 @@ import {
   arrayify,
   defaultAbiCoder,
   getCreate2Address,
+  hexConcat,
   hexDataSlice,
   keccak256
 } from 'ethers/lib/utils'
@@ -9,7 +10,7 @@ import { BigNumber, Contract, Signer, Wallet } from 'ethers'
 import { AddressZero, callDataCost, HashZero, rethrow } from './testutils'
 import { ecsign, toRpcSig, keccak256 as keccak256_buffer } from 'ethereumjs-util'
 import {
-  EntryPoint
+  EntryPoint, VerifyingPaymaster
 } from '../typechain'
 import { UserOperation } from './UserOperation'
 import { Create2Factory } from '../src/Create2Factory'
@@ -243,7 +244,35 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
   return op2
 }
 
-export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | Signer, entryPoint?: EntryPoint, isPhantom?: Boolean): Promise<UserOperation> {
+export async function getPaymasterAuthorization (op: Partial<UserOperation>, signer: Wallet | Signer, paymaster?: VerifyingPaymaster): Promise<string> {
+  /* const opToSign = defaultAbiCoder.encode([
+    'address', // sender
+    'uint256', // nonce
+    'bytes32', // initCode
+    'bytes32', // callData
+    'uint256', // callGasLimit
+    'uint', // verificationGasLimit
+    'uint', // preVerificationGas
+    'uint256', // maxFeePerGas
+    'uint256' // maxPriorityFeePerGas
+  ], [
+    op.sender,
+    op.nonce,
+    keccak256(op.initCode!),
+    keccak256(op.callData!),
+    op.callGasLimit,
+    op.verificationGasLimit,
+    op.preVerificationGas,
+    op.maxFeePerGas,
+    op.maxPriorityFeePerGas
+  ]) */
+  const hash = await paymaster!.getHash(op)
+  const paymasterSignature = await signer.signMessage(arrayify(hash))
+  console.log('paymaster signer signature ', paymasterSignature)
+  return paymasterSignature
+}
+
+export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | Signer, entryPoint?: EntryPoint, paymaster?: VerifyingPaymaster, isPhantom?: Boolean): Promise<UserOperation> {
   const provider = entryPoint?.provider
   const op2 = await fillUserOp(op, entryPoint)
 
@@ -256,6 +285,20 @@ export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | 
   // op2.preVerificationGas = 5000000
   // userOp.callGasLimit = 50000000
   }
+
+  // const paymasterSignature = await getPaymasterAuthorization(op2, signer, paymaster)
+
+  const hash = await paymaster!.getHash(op2)
+  const paymasterSignature = await signer.signMessage(arrayify(hash))
+
+  const paymasterAndData = hexConcat([
+    paymaster!.address,
+    paymasterSignature
+  ]
+  )
+
+  // Remove this line to fallback to wallet deposit flow
+  op2.paymasterAndData = paymasterAndData
 
   const chainId = await provider!.getNetwork().then(net => net.chainId)
   const message = arrayify(getRequestId(op2, entryPoint!.address, chainId))
