@@ -56,7 +56,7 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   // index is unique for a wallet (so same owner can have multiple wallets, with different index
   const index = parseInt(process.env.AA_INDEX ?? '0')
   console.log('using account index (AA_INDEX)', index)
-  const aasigner = new AASigner(ethersSigner, entryPointAddress, paymasterAddress, sendUserOp, index)
+  const aasigner = new AASigner(ethers.provider, ethersSigner, entryPointAddress, paymasterAddress, sendUserOp, index)
   // connect to pre-deployed wallet
   // await aasigner.connectWalletAddress(walletAddress)
   const myAddress = await aasigner.getAddress()

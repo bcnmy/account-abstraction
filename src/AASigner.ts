@@ -1,4 +1,4 @@
-import { BigNumber, Bytes, ethers, Signer, Event } from 'ethers'
+import { BigNumber, Bytes, ethers, Signer, Event, providers } from 'ethers'
 import { BaseProvider, Provider, TransactionRequest } from '@ethersproject/providers'
 import { Deferrable, resolveProperties } from '@ethersproject/properties'
 import { EntryPoint, EntryPoint__factory, SmartWallet, SmartWallet__factory, VerifyingPaymaster, VerifyingPaymaster__factory } from '../typechain'
@@ -229,8 +229,9 @@ export class AASigner extends Signer {
    * @param sendUserOp function to actually send the UserOp to the entryPoint.
    * @param index - index of this wallet for this signer.
    */
-  constructor (readonly signer: Signer, readonly entryPointAddress: string, readonly paymasterAddress: string, readonly sendUserOp: SendUserOp, readonly index = 0, readonly provider = signer.provider) {
+  constructor (readonly ethersProvider: providers.JsonRpcProvider, readonly signer: Signer, readonly entryPointAddress: string, readonly paymasterAddress: string, readonly sendUserOp: SendUserOp, readonly index = 0, readonly provider = signer.provider) {
     super()
+    this.ethersProvider = ethersProvider
     this.entryPoint = EntryPoint__factory.connect(entryPointAddress, signer)
     this.paymaster = VerifyingPaymaster__factory.connect(paymasterAddress, signer)
     console.log(' AASigner Constructor')
@@ -477,7 +478,7 @@ export class AASigner extends Signer {
       callGasLimit: tx.gasLimit,
       maxPriorityFeePerGas,
       maxFeePerGas
-    }, this.signer, this.entryPoint, this.paymaster, this._isPhantom)
+    }, this.signer, this.ethersProvider.getSigner(0), this.entryPoint, this.paymaster, this._isPhantom)
     console.log(' userOp ', userOp)
 
     return userOp

@@ -272,7 +272,7 @@ export async function fillUserOp (op: Partial<UserOperation>, entryPoint?: Entry
   return paymasterSignature
 } */
 
-export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | Signer, entryPoint?: EntryPoint, paymaster?: VerifyingPaymaster, isPhantom?: Boolean): Promise<UserOperation> {
+export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | Signer, paymasterSigner: Wallet | Signer, entryPoint?: EntryPoint, paymaster?: VerifyingPaymaster, isPhantom?: Boolean): Promise<UserOperation> {
   const provider = entryPoint?.provider
   const op2 = await fillUserOp(op, entryPoint)
 
@@ -296,7 +296,7 @@ export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | 
 
   // assuming returns true for now we go ahead and sign it
   const hash = await paymaster!.getHash(op2)
-  const paymasterSignature = await signer.signMessage(arrayify(hash))
+  const paymasterSignature = await paymasterSigner.signMessage(arrayify(hash))
 
   const paymasterAndData = hexConcat([
     paymaster!.address,
@@ -309,6 +309,8 @@ export async function fillAndSign (op: Partial<UserOperation>, signer: Wallet | 
 
   const chainId = await provider!.getNetwork().then(net => net.chainId)
   const message = arrayify(getRequestId(op2, entryPoint!.address, chainId))
+
+  // const FAKE_SIGNATURE = '0x39f5032f1cd30005aa1e35f04394cabfe7de3b6ae6d95b27edd8556064c287bf61f321fead0cf48ca4405d497cc8fc47fc7ff0b7f5c45baa14090a44f2307d8230'
 
   return {
     ...op2,
