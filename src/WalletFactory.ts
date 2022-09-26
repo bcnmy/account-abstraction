@@ -8,7 +8,7 @@ const walletFactoryAbi = [{ inputs: [{ internalType: 'address', name: '_baseImpl
 export class WalletFactory {
   // @notice this wallet factory currently only works on goerli
   // The address would be same on other networks
-  static readonly contractAddress = '0xda0cdf6878e338152C614Cd075d4e6ff857Aa060'
+  static readonly contractAddress = '0x0d40be078e3910c6a0eef4aecfac9a62fad888e6'
   readonly ethersProvider
 
   constructor (readonly provider: Provider,

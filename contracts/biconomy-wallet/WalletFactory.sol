@@ -3,10 +3,7 @@ pragma solidity ^0.8.0;
 
 //import "@openzeppelin/contracts/proxy/Clones.sol";
 import "./Proxy.sol";
-import "./SmartWallet.sol"; 
-//@review
-//@todo IWallet should have execTransaction
-//possibly IWallet.sol
+import "./BaseSmartWallet.sol"; 
 
 contract WalletFactory {
     address internal _defaultImpl; 
@@ -43,7 +40,7 @@ contract WalletFactory {
         require(address(proxy) != address(0), "Create2 call failed");
         // EOA + Version tracking
         emit WalletCreated(proxy,_defaultImpl,_owner, VERSION, _index);
-        SmartWallet(proxy).init(_owner, _entryPoint, _handler);
+        BaseSmartWallet(proxy).init(_owner, _entryPoint, _handler);
         isWalletExist[proxy] = true;
     }
 
@@ -59,7 +56,7 @@ contract WalletFactory {
         assembly {
             proxy := create(0x0, add(0x20, deploymentData), mload(deploymentData))
         }
-        SmartWallet(proxy).init(_owner, _entryPoint, _handler);
+        BaseSmartWallet(proxy).init(_owner, _entryPoint, _handler);
         isWalletExist[proxy] = true;
     }
 
