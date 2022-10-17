@@ -16,14 +16,14 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   const aa_url = process.env.AA_URL
 
   // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-  if (aa_url == null && !process.env.FORCE_DEPLOY) {
+  /* if (aa_url == null && !process.env.FORCE_DEPLOY) {
     await hre.run('deploy')
     const chainId = await hre.getChainId()
     if (chainId.match(/1337/) == null) {
       console.log('chainid=', chainId)
       await hre.run('etherscan-verify')
     }
-  }
+  } */
   const [entryPointAddress, testCounterAddress, paymasterAddress] = await Promise.all([
     hre.deployments.get('EntryPoint').then(d => d.address),
     hre.deployments.get('TestCounter').then(d => d.address),
@@ -109,9 +109,9 @@ import { TransactionReceipt } from '@ethersproject/abstract-provider/src.ts/inde
   console.log(logs.map((e: any) => ({ ev: e.event, ...objdump(e.args!) })))
   console.log('1st run gas used:', await evInfo(rcpt))
 
-  const ret1 = await testCounter.justemit()
-  const rcpt2 = await ret1.wait()
-  console.log('2nd run:', await evInfo(rcpt2))
+  // const ret1 = await testCounter.justemit()
+  // const rcpt2 = await ret1.wait()
+  // console.log('2nd run:', await evInfo(rcpt2))
 
   async function evInfo (rcpt: TransactionReceipt): Promise<any> {
     // TODO: checking only latest block...
