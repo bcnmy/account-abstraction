@@ -8,8 +8,7 @@ pragma solidity ^0.8.7;
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "./EIP4337Fallback.sol";
-import "../interfaces/IEntryPoint.sol";
-import "../interfaces/IWallet.sol";
+import "../core/EntryPoint.sol";
 
     using ECDSA for bytes32;
 
@@ -33,7 +32,8 @@ contract EIP4337Manager is GnosisSafe, IWallet {
     /**
      * delegate-called (using execFromModule) through the fallback, so "real" msg.sender is attached as last 20 bytes
      */
-    function validateUserOp(UserOperation calldata userOp, bytes32 requestId, address /*aggregator*/, uint256 missingWalletFunds) external override {
+    function validateUserOp(UserOperation calldata userOp, bytes32 requestId, address /*aggregator*/, uint256 missingWalletFunds)
+    external override returns (uint256 deadline) {
         address _msgSender = address(bytes20(msg.data[msg.data.length - 20 :]));
         require(_msgSender == entryPoint, "wallet: not from entrypoint");
 
@@ -53,6 +53,7 @@ contract EIP4337Manager is GnosisSafe, IWallet {
             (success);
             //ignore failure (its EntryPoint's job to verify, not wallet.)
         }
+        return 0;
     }
 
     /**
@@ -126,10 +127,8 @@ contract EIP4337Manager is GnosisSafe, IWallet {
         UserOperation memory userOp = UserOperation(address(safe), 0, "", "", 0, 1000000, 0, 0, 0, "", sig);
         UserOperation[] memory userOps = new UserOperation[](1);
         userOps[0] = userOp;
-        IEntryPoint.UserOpsPerAggregator[] memory opas = new IEntryPoint.UserOpsPerAggregator[](1);
-        opas[0] = IEntryPoint.UserOpsPerAggregator(userOps, IAggregator(address(0)), "");
         IEntryPoint _entryPoint = IEntryPoint(payable(manager.entryPoint()));
-        try _entryPoint.handleAggregatedOps(opas, payable(msg.sender)) {
+        try _entryPoint.handleOps(userOps, payable(msg.sender)) {
             revert("validateEip4337: handleOps must fail");
         } catch (bytes memory error) {
             if (keccak256(error) != keccak256(abi.encodeWithSignature("FailedOp(uint256,address,string)", 0, address(0), "wallet: wrong signature"))) {

@@ -17,11 +17,13 @@ import "../interfaces/IEntryPoint.sol";
 import "../interfaces/ICreate2Deployer.sol";
 import "../utils/Exec.sol";
 import "./StakeManager.sol";
+import "./SenderCreator.sol";
 
 contract EntryPoint is IEntryPoint, StakeManager {
 
     using UserOperationLib for UserOperation;
 
+    SenderCreator private immutable senderCreator = new SenderCreator();
 
     // internal value used during simulation: need to query aggregator if wallet is created
     address private constant SIMULATE_NO_AGGREGATOR = address(1);
@@ -234,6 +236,7 @@ contract EntryPoint is IEntryPoint, StakeManager {
      *          perform the equivalent check using an off-chain library code
      * @return preOpGas total gas used by validation (including contract creation)
      * @return prefund the amount the wallet had to prefund (zero in case a paymaster pays)
+     * @return deadline until what time this userOp is valid (the minimum value of wallet and paymaster's deadline)
      * @return actualAggregator the aggregator used by this userOp. if a non-zero aggregator is returned, the bundler must get its params using
      *      aggregator.
      * @return sigForUserOp - only if has actualAggregator: this value is returned from IAggregator.validateUserOpSignature, and should be placed in the userOp.signature when creating a bundle.
@@ -241,12 +244,12 @@ contract EntryPoint is IEntryPoint, StakeManager {
      * @return offChainSigInfo - if has actualAggregator, and offChainSigCheck is true, this value should be used by the off-chain signature code (e.g. it contains the sender's publickey)
      */
     function simulateValidation(UserOperation calldata userOp, bool offChainSigCheck)
-    external returns (uint256 preOpGas, uint256 prefund, address actualAggregator, bytes memory sigForUserOp, bytes memory sigForAggregation, bytes memory offChainSigInfo) {
+    external returns (uint256 preOpGas, uint256 prefund, uint256 deadline, address actualAggregator, bytes memory sigForUserOp, bytes memory sigForAggregation, bytes memory offChainSigInfo) {
         uint256 preGas = gasleft();
 
         UserOpInfo memory outOpInfo;
 
-        actualAggregator = _validatePrepayment(0, userOp, outOpInfo, SIMULATE_NO_AGGREGATOR);
+        (actualAggregator, deadline) = _validatePrepayment(0, userOp, outOpInfo, SIMULATE_NO_AGGREGATOR);
         prefund = outOpInfo.prefund;
         preOpGas = preGas - gasleft() + userOp.preVerificationGas;
 
@@ -270,31 +273,14 @@ contract EntryPoint is IEntryPoint, StakeManager {
     }
 
     // create the sender's contract if needed.
-    function _createSenderIfNeeded(MemoryUserOp memory mUserOp, bytes calldata initCode) internal {
+    function _createSenderIfNeeded(uint256 opIndex, MemoryUserOp memory mUserOp, bytes calldata initCode) internal {
         if (initCode.length != 0) {
-            require(mUserOp.sender.code.length == 0, "sender already constructed");
-            address sender1 = _createSender(initCode);
-            require(sender1 == mUserOp.sender, "sender doesn't match initCode address");
-            require(sender1.code.length != 0, "initCode failed to create sender");
+            if (mUserOp.sender.code.length != 0) revert FailedOp(opIndex, address(0), "sender already constructed");
+            address sender1 = senderCreator.createSender(initCode);
+            if (sender1 == address(0)) revert FailedOp(opIndex, address(0), "initCode failed");
+            if (sender1 != mUserOp.sender) revert FailedOp(opIndex, address(0), "sender doesn't match initCode address");
+            if (sender1.code.length == 0) revert FailedOp(opIndex, address(0), "initCode failed to create sender");
         }
-    }
-
-    /**
-     * call the "initCode" factory to create and return the sender wallet address
-     * initCode must be unique (e.g. contains the signer address), to make sure
-     *  it can only be executed from the entryPoint, and called with its initialization code (callData)
-     * @param initCode the initCode value from a UserOp. contains 20 bytes of factory address, followed by calldata
-     * @return sender the returned address of the created wallet.
-     */
-    function _createSender(bytes calldata initCode) internal returns (address sender) {
-        address initAddress = address(bytes20(initCode[0 : 20]));
-        bytes memory initCallData = initCode[20 :];
-        bool success;
-        assembly {
-            success := call(gas(), initAddress, 0, add(initCallData, 0x20), mload(initCallData), 0, 32)
-            sender := mload(0)
-        }
-        require(success, "initCode failed");
     }
 
     /**
@@ -303,7 +289,7 @@ contract EntryPoint is IEntryPoint, StakeManager {
      */
     function getSenderAddress(bytes calldata initCode) public returns (address sender) {
         require(msg.sender == address(0), "must be called off-chain with from=zero-addr");
-        return _createSender(initCode);
+        return senderCreator.createSender(initCode);
     }
 
     /**
@@ -312,11 +298,11 @@ contract EntryPoint is IEntryPoint, StakeManager {
      * decrement wallet's deposit if needed
      */
     function _validateWalletPrepayment(uint256 opIndex, UserOperation calldata op, UserOpInfo memory opInfo, address aggregator, uint256 requiredPrefund)
-    internal returns (uint256 gasUsedByValidateWalletPrepayment, address actualAggregator) {
+    internal returns (uint256 gasUsedByValidateWalletPrepayment, address actualAggregator, uint256 deadline) {
     unchecked {
         uint256 preGas = gasleft();
         MemoryUserOp memory mUserOp = opInfo.mUserOp;
-        _createSenderIfNeeded(mUserOp, op.initCode);
+        _createSenderIfNeeded(opIndex, mUserOp, op.initCode);
         if (aggregator == SIMULATE_NO_AGGREGATOR) {
             try IAggregatedWallet(mUserOp.sender).getAggregator() returns (address userOpAggregator) {
                 aggregator = actualAggregator = userOpAggregator;
@@ -331,8 +317,12 @@ contract EntryPoint is IEntryPoint, StakeManager {
             uint256 bal = balanceOf(sender);
             missingWalletFunds = bal > requiredPrefund ? 0 : requiredPrefund - bal;
         }
-        // solhint-disable-next-line no-empty-blocks
-        try IWallet(sender).validateUserOp{gas : mUserOp.verificationGasLimit}(op, opInfo.requestId, aggregator, missingWalletFunds) {
+        try IWallet(sender).validateUserOp{gas : mUserOp.verificationGasLimit}(op, opInfo.requestId, aggregator, missingWalletFunds) returns (uint256 _deadline) {
+            // solhint-disable-next-line not-rely-on-time
+            if (_deadline != 0 && _deadline < block.timestamp) {
+                revert FailedOp(opIndex, address(0), "expired");
+            }
+            deadline = _deadline;
         } catch Error(string memory revertReason) {
             revert FailedOp(opIndex, address(0), revertReason);
         } catch {
@@ -357,7 +347,7 @@ contract EntryPoint is IEntryPoint, StakeManager {
      * revert with proper FailedOp in case paymaster reverts.
      * decrement paymaster's deposit
      */
-    function _validatePaymasterPrepayment(uint256 opIndex, UserOperation calldata op, UserOpInfo memory opInfo, uint256 requiredPreFund, uint256 gasUsedByValidateWalletPrepayment) internal returns (bytes memory context) {
+    function _validatePaymasterPrepayment(uint256 opIndex, UserOperation calldata op, UserOpInfo memory opInfo, uint256 requiredPreFund, uint256 gasUsedByValidateWalletPrepayment) internal returns (bytes memory context, uint256 deadline) {
     unchecked {
         MemoryUserOp memory mUserOp = opInfo.mUserOp;
         address paymaster = mUserOp.paymaster;
@@ -372,8 +362,13 @@ contract EntryPoint is IEntryPoint, StakeManager {
         }
         paymasterInfo.deposit = uint112(deposit - requiredPreFund);
         uint256 gas = mUserOp.verificationGasLimit - gasUsedByValidateWalletPrepayment;
-        try IPaymaster(paymaster).validatePaymasterUserOp{gas : gas}(op, opInfo.requestId, requiredPreFund) returns (bytes memory _context){
+        try IPaymaster(paymaster).validatePaymasterUserOp{gas : gas}(op, opInfo.requestId, requiredPreFund) returns (bytes memory _context, uint256 _deadline){
+            // solhint-disable-next-line not-rely-on-time
+            if (_deadline != 0 && _deadline < block.timestamp) {
+                revert FailedOp(opIndex, paymaster, "expired");
+            }
             context = _context;
+            deadline = _deadline;
         } catch Error(string memory revertReason) {
             revert FailedOp(opIndex, paymaster, revertReason);
         } catch {
@@ -390,7 +385,7 @@ contract EntryPoint is IEntryPoint, StakeManager {
      * @param userOp the userOp to validate
      */
     function _validatePrepayment(uint256 opIndex, UserOperation calldata userOp, UserOpInfo memory outOpInfo, address aggregator)
-    private returns (address actualAggregator) {
+    private returns (address actualAggregator, uint256 deadline) {
 
         uint256 preGas = gasleft();
         MemoryUserOp memory mUserOp = outOpInfo.mUserOp;
@@ -405,17 +400,21 @@ contract EntryPoint is IEntryPoint, StakeManager {
 
         uint256 gasUsedByValidateWalletPrepayment;
         (uint256 requiredPreFund) = _getRequiredPrefund(mUserOp);
-        (gasUsedByValidateWalletPrepayment, actualAggregator) = _validateWalletPrepayment(opIndex, userOp, outOpInfo, aggregator, requiredPreFund);
-
+        (gasUsedByValidateWalletPrepayment, actualAggregator, deadline) = _validateWalletPrepayment(opIndex, userOp, outOpInfo, aggregator, requiredPreFund);
         //a "marker" where wallet opcode validation is done and paymaster opcode validation is about to start
         // (used only by off-chain simulateValidation)
         numberMarker();
 
         bytes memory context;
         if (mUserOp.paymaster != address(0)) {
-            context = _validatePaymasterPrepayment(opIndex, userOp, outOpInfo, requiredPreFund, gasUsedByValidateWalletPrepayment);
+            uint paymasterDeadline;
+            (context, paymasterDeadline) = _validatePaymasterPrepayment(opIndex, userOp, outOpInfo, requiredPreFund, gasUsedByValidateWalletPrepayment);
+            if (paymasterDeadline != 0 && paymasterDeadline < deadline) {
+                deadline = paymasterDeadline;
+            }
         } else {
             context = "";
+
         }
     unchecked {
         uint256 gasUsed = preGas - gasleft();
