@@ -437,6 +437,9 @@ export class AASigner extends Signer {
     const tx: TransactionRequest = await resolveProperties(transaction)
     await this.syncAccount()
 
+    console.log('resolved properties..')
+    console.log(tx)
+
     let initCode: BytesLike | undefined
     if (this._isPhantom) {
       console.log('ever here??')
@@ -460,6 +463,9 @@ export class AASigner extends Signer {
     }
     // TODO
     // Estimate gas limit for execute
+    console.log('wallet would be undeployed')
+    console.log(this._isPhantom)
+    console.log(this._wallet?.address)
     const execFromEntryPoint = await this._wallet!.populateTransaction.execFromEntryPoint(tx.to!, tx.value ?? 0, tx.data!, 0, 100000)
 
     let { gasPrice, maxPriorityFeePerGas, maxFeePerGas } = tx
